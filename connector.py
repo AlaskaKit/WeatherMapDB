@@ -1,42 +1,24 @@
 import sys
-
+from typing import Iterable
 import requests
-import json
 import psycopg2
 from config import *
-
-
-def read_data(cities: dict, filename: str) -> list:
-    """
-    A function to seek cities ID in the catalogue, provided by OpenWeather (for the sake of not doing it manually).
-    :param cities: a list of dictionaries with the name of the city and its country (to avoid ambiguity).
-    :param filename: name of catalogue file provided by OpenWeather
-    :return: a list of requested cities id.
-    """
-    city_ids = []
-    with open(filename) as cities_file:
-        objs = cities_file.read()
-    # TODO: поиск по файлу
-    
-    return city_ids
 
 
 class WeatherFetcher:
     """
     Connector to API.
     """
-    def __init__(self, *args):
+    def __init__(self, ids: Iterable[int]):
         """
         A constructor for WeatherFetcher. Takes a list of the city IDs to request the API.
         URL, credentials and unites of measure are defined in the config file.
-        :param args: a list with city IDs.
+        :param ids: a list with city IDs.
         """
         self.url = API_URL
         self.units = UNITS
         self.appid = APPID
-        # TODO: замена на args
-        # self.city_id_list = [524894, 745042, 5128581, 264371]
-        self.city_id_list = [4166711]
+        self.city_id_list = ids
         
     def fetch_api(self) -> list:
         """
@@ -54,9 +36,9 @@ class WeatherFetcher:
             try:
                 response = requests.get(url, timeout=2, params=parameters)
                 response.raise_for_status()
-            except requests.exceptions.HTTPError as e:
+            except requests.exceptions.HTTPError:
                 raise
-            except requests.exceptions.RequestException as err:
+            except requests.exceptions.RequestException:
                 raise
                 
             data: dict = response.json()
@@ -73,11 +55,10 @@ class WeatherFetcher:
             pars["id"] = city_id
             try:
                 chunk = connect_to_api(self.url, pars)
+                result.append(chunk)
             except Exception as err:
                 print(err, file=sys.stderr)
             
-            result.append(chunk)
-        
         print("Seems collecting data from API worked just fine.")
         
         return result
@@ -109,7 +90,7 @@ class WeatherSaver:
     def write_to_db(self):
         """
         Writes prepared data to DB using psycopg2 library.
-        DB credentials are set in the config file.
+        DB credentials and parameters are set in the config file.
         If requested city already present in the table, its values are being updated.
         Throws error if DB is not found and if there are no required table in the DB.
         :return: the writing/updating status if there were no errors.
@@ -192,10 +173,7 @@ class WeatherSaver:
         
 
 if __name__ == '__main__':
-    # pass
-    a = WeatherFetcher()
-    cts = a.fetch_api()
-    b = WeatherSaver(cts)
-    b.write_to_db()
-
-
+    fetcher = WeatherFetcher(CITIES)
+    cts = fetcher.fetch_api()
+    db_writer = WeatherSaver(cts)
+    db_writer.write_to_db()
