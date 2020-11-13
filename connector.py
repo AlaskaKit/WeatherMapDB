@@ -87,7 +87,7 @@ class WeatherSaver:
                 print(f"Invalid data received. Chunk index: {cities.index(city)}", data_error, file=sys.stderr)
                 sys.exit(1)
                 
-    def write_to_db(self):
+    def write_to_db(self) -> None:
         """
         Writes prepared data to DB using psycopg2 library.
         DB credentials and parameters are set in the config file.
@@ -134,20 +134,20 @@ class WeatherSaver:
         # inserting/updating values
         for city_data in self.values:
             try:
-                cursor.execute("INSERT INTO unsorted_weather (city_id, city_name, weather_description, temperature, "
-                               "pressure, humidity, visibility, wind_speed, wind_dir, clouds_all) VALUES "
-                               "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
-                               "ON CONFLICT (city_id) DO UPDATE "
-                               "SET city_id = excluded.city_id, "
-                               "city_name = excluded.city_name, "
-                               "weather_description = excluded.weather_description, "
-                               "temperature = excluded.temperature, "
-                               "pressure = excluded.pressure, "
-                               "humidity = excluded.humidity, "
-                               "visibility = excluded.visibility, "
-                               "wind_speed = excluded.wind_speed, "
-                               "wind_dir = excluded.wind_dir, "
-                               "clouds_all = excluded.clouds_all",
+                cursor.execute(f"INSERT INTO {UNSORTED_W} (city_id, city_name, weather_description, temperature, "
+                               f"pressure, humidity, visibility, wind_speed, wind_dir, clouds_all) VALUES "
+                               f"(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                               f"ON CONFLICT (city_id) DO UPDATE "
+                               f"SET city_id = excluded.city_id, "
+                               f"city_name = excluded.city_name, "
+                               f"weather_description = excluded.weather_description, "
+                               f"temperature = excluded.temperature, "
+                               f"pressure = excluded.pressure, "
+                               f"humidity = excluded.humidity, "
+                               f"visibility = excluded.visibility, "
+                               f"wind_speed = excluded.wind_speed, "
+                               f"wind_dir = excluded.wind_dir, "
+                               f"clouds_all = excluded.clouds_all",
                                city_data)
             except psycopg2.Error as err:
                 print(err.pgerror, file=sys.stderr)
