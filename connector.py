@@ -36,7 +36,7 @@ class WeatherFetcher:
         self.appid = APPID
         # TODO: замена на args
         # self.city_id_list = [524894, 745042, 5128581, 264371]
-        self.city_id_list = [4166825]
+        self.city_id_list = [4166711]
         
     def fetch_api(self) -> list:
         """
@@ -55,13 +55,14 @@ class WeatherFetcher:
                 response = requests.get(url, timeout=2, params=parameters)
                 response.raise_for_status()
             except requests.exceptions.HTTPError as e:
-                e.__str__ = f'Unexpected response. Code {response.status_code}'
                 raise
             except requests.exceptions.RequestException as err:
-                err.__str__ = f'Unable to connect to server. {err}'
                 raise
-        
+                
             data: dict = response.json()
+            
+            if not data:
+                raise ValueError(f"No data received from server for city id: {parameters['id']}!")
             
             return data
 
@@ -72,10 +73,9 @@ class WeatherFetcher:
             pars["id"] = city_id
             try:
                 chunk = connect_to_api(self.url, pars)
-            except Exception:
-                raise
-            if not chunk:
-                raise ValueError(f"No data received from server for city id:{city_id}!")
+            except Exception as err:
+                print(err, file=sys.stderr)
+            
             result.append(chunk)
         
         print("Seems collecting data from API worked just fine.")
@@ -103,8 +103,8 @@ class WeatherSaver:
                 self.values.append(city_value)
                 
             except KeyError as data_error:
-                print(f"Invalid data received. Chunk index: {cities.index(city)}", data_error)
-                sys.exit(-1)
+                print(f"Invalid data received. Chunk index: {cities.index(city)}", data_error, file=sys.stderr)
+                sys.exit(1)
                 
     def write_to_db(self):
         """
@@ -123,11 +123,32 @@ class WeatherSaver:
                 password=PASSWORD
             )
         except psycopg2.Error as err:
-            print("Something went wrong. ", err.pgerror)
-            sys.exit(-1)
+            print(err.pgerror, file=sys.stderr)
+            sys.exit(1)
         
         # creating cursor
         cursor = conn.cursor()
+        
+        # creating table in case it doesn't exits
+        try:
+            cursor.execute(f"CREATE TABLE IF NOT EXISTS public.{UNSORTED_W} "
+                           f"("
+                           f"city_id integer NOT NULL, "
+                           f"city_name character varying(100) NOT NULL, "
+                           f"weather_description character varying(50) NOT NULL, "
+                           f"temperature real NOT NULL, "
+                           f"pressure integer NOT NULL, "
+                           f"humidity integer NOT NULL, "
+                           f"visibility integer NOT NULL, "
+                           f"wind_speed real NOT NULL, "
+                           f"wind_dir integer NOT NULL, "
+                           f"clouds_all integer NOT NULL, "
+                           f"CONSTRAINT {UNSORTED_W}_pkey PRIMARY KEY (city_id)"
+                           f") TABLESPACE {TABLESPACE}")
+                      
+        except psycopg2.Error as err:
+            print(err.pgerror, file=sys.stderr)
+            sys.exit(1)
         
         # inserting/updating values
         for city_data in self.values:
@@ -136,17 +157,20 @@ class WeatherSaver:
                                "pressure, humidity, visibility, wind_speed, wind_dir, clouds_all) VALUES "
                                "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
                                "ON CONFLICT (city_id) DO UPDATE "
-                               "SET city_id = excluded.city_id, city_name = excluded.city_name, "
+                               "SET city_id = excluded.city_id, "
+                               "city_name = excluded.city_name, "
                                "weather_description = excluded.weather_description, "
                                "temperature = excluded.temperature, "
-                               "pressure = excluded.pressure, humidity = excluded.humidity, "
+                               "pressure = excluded.pressure, "
+                               "humidity = excluded.humidity, "
                                "visibility = excluded.visibility, "
-                               "wind_speed = excluded.wind_speed, wind_dir = excluded.wind_dir, "
+                               "wind_speed = excluded.wind_speed, "
+                               "wind_dir = excluded.wind_dir, "
                                "clouds_all = excluded.clouds_all",
                                city_data)
             except psycopg2.Error as err:
-                print("Something went wrong. ", err.pgerror)
-                sys.exit(-1)
+                print(err.pgerror, file=sys.stderr)
+                sys.exit(1)
         
         # commit transaction
         conn.commit()
@@ -168,10 +192,10 @@ class WeatherSaver:
         
 
 if __name__ == '__main__':
-    pass
-    # a = WeatherFetcher()
-    # cts = a.fetch_api()
-    # b = WeatherSaver(cts)
-    # b.write_to_db()
+    # pass
+    a = WeatherFetcher()
+    cts = a.fetch_api()
+    b = WeatherSaver(cts)
+    b.write_to_db()
 
 
